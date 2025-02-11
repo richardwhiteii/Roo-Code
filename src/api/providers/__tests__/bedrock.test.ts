@@ -1,4 +1,3 @@
-// Mock AWS SDK credential providers
 jest.mock("@aws-sdk/credential-providers", () => ({
 	fromIni: jest.fn().mockReturnValue({
 		accessKeyId: "profile-access-key",
@@ -180,6 +179,66 @@ describe("AwsBedrockHandler", () => {
 					// Should throw before yielding any chunks
 				}
 			}).rejects.toThrow("AWS Bedrock error")
+			// P34d3
+		})
+
+		it("should handle router-specific configurations", async () => {
+			const mockResponse = {
+				messages: [
+					{
+						role: "assistant",
+						content: [{ type: "text", text: "Hello! How can I help you?" }],
+					},
+				],
+				usage: {
+					input_tokens: 10,
+					output_tokens: 5,
+				},
+			}
+
+			// Mock AWS SDK invoke
+			const mockStream = {
+				[Symbol.asyncIterator]: async function* () {
+					yield {
+						metadata: {
+							usage: {
+								inputTokens: 10,
+								outputTokens: 5,
+							},
+						},
+					}
+				},
+			}
+
+			const mockInvoke = jest.fn().mockResolvedValue({
+				stream: mockStream,
+			})
+
+			handler["client"] = {
+				send: mockInvoke,
+			} as unknown as BedrockRuntimeClient
+
+			const stream = handler.createMessage(systemPrompt, mockMessages)
+			const chunks = []
+
+			for await (const chunk of stream) {
+				chunks.push(chunk)
+			}
+
+			expect(chunks.length).toBeGreaterThan(0)
+			expect(chunks[0]).toEqual({
+				type: "usage",
+				inputTokens: 10,
+				outputTokens: 5,
+			})
+
+			expect(mockInvoke).toHaveBeenCalledWith(
+				expect.objectContaining({
+					input: expect.objectContaining({
+						modelId: "anthropic-prompt-router",
+					}),
+				}),
+			)
 		})
 	})
 
@@ -187,9 +246,9 @@ describe("AwsBedrockHandler", () => {
 		it("should complete prompt successfully", async () => {
 			const mockResponse = {
 				output: new TextEncoder().encode(
-					JSON.stringify({
-						content: "Test response",
-					}),
+						JSON.stringify({
+							content: "Test response",
+						}),
 				),
 			}
 
@@ -201,22 +260,22 @@ describe("AwsBedrockHandler", () => {
 			const result = await handler.completePrompt("Test prompt")
 			expect(result).toBe("Test response")
 			expect(mockSend).toHaveBeenCalledWith(
-				expect.objectContaining({
-					input: expect.objectContaining({
-						modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
-						messages: expect.arrayContaining([
-							expect.objectContaining({
-								role: "user",
-								content: [{ text: "Test prompt" }],
+					expect.objectContaining({
+						input: expect.objectContaining({
+							modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+							messages: expect.arrayContaining([
+								expect.objectContaining({
+									role: "user",
+									content: [{ text: "Test prompt" }],
+								}),
+							]),
+							inferenceConfig: expect.objectContaining({
+								maxTokens: 5000,
+								temperature: 0.3,
+								topP: 0.1,
 							}),
-						]),
-						inferenceConfig: expect.objectContaining({
-							maxTokens: 5000,
-							temperature: 0.3,
-							topP: 0.1,
 						}),
 					}),
-				}),
 			)
 		})
 
@@ -228,7 +287,7 @@ describe("AwsBedrockHandler", () => {
 			} as unknown as BedrockRuntimeClient
 
 			await expect(handler.completePrompt("Test prompt")).rejects.toThrow(
-				"Bedrock completion error: AWS Bedrock error",
+					"Bedrock completion error: AWS Bedrock error",
 			)
 		})
 
@@ -271,9 +330,9 @@ describe("AwsBedrockHandler", () => {
 
 			const mockResponse = {
 				output: new TextEncoder().encode(
-					JSON.stringify({
-						content: "Test response",
-					}),
+						JSON.stringify({
+							content: "Test response",
+						}),
 				),
 			}
 
@@ -285,11 +344,11 @@ describe("AwsBedrockHandler", () => {
 			const result = await handler.completePrompt("Test prompt")
 			expect(result).toBe("Test response")
 			expect(mockSend).toHaveBeenCalledWith(
-				expect.objectContaining({
-					input: expect.objectContaining({
-						modelId: "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+					expect.objectContaining({
+						input: expect.objectContaining({
+							modelId: "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+						}),
 					}),
-				}),
 			)
 		})
 	})
