@@ -1,3 +1,9 @@
+import { AwsBedrockHandler } from "../bedrock"
+import { MessageContent } from "../../../shared/api"
+import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime"
+import { Anthropic } from "@anthropic-ai/sdk"
+import { fromIni } from "@aws-sdk/credential-providers"
+
 // Mock AWS SDK credential providers
 jest.mock("@aws-sdk/credential-providers", () => ({
 	fromIni: jest.fn().mockReturnValue({
@@ -5,12 +11,6 @@ jest.mock("@aws-sdk/credential-providers", () => ({
 		secretAccessKey: "profile-secret-key",
 	}),
 }))
-
-import { AwsBedrockHandler } from "../bedrock"
-import { MessageContent } from "../../../shared/api"
-import { BedrockRuntimeClient } from "@aws-sdk/client-bedrock-runtime"
-import { Anthropic } from "@anthropic-ai/sdk"
-import { fromIni } from "@aws-sdk/credential-providers"
 
 describe("AwsBedrockHandler", () => {
 	let handler: AwsBedrockHandler

@@ -218,6 +218,29 @@ Help Roo Code focus on the most relevant details without blowing the token budge
 
 ---
 
+## AWS Bedrock Integration
+
+Roo Code integrates with AWS Bedrock to provide advanced AI capabilities. The integration is handled by the `AwsBedrockHandler` class, which is responsible for communicating with the AWS Bedrock API.
+
+### Key Features
+
+- **Cross-Region Inference**: Supports cross-region inference to optimize latency and performance.
+- **Prompt Cache**: Utilizes AWS Bedrock's prompt cache for efficient reuse of prompts.
+- **Tool Use**: Supports tool use and tool results, allowing for complex interactions and workflows.
+
+### Model Definitions
+
+Roo Code supports various models available on AWS Bedrock. Here are some of the key models:
+
+- **amazon.nova-pro-v1:0**: High-performance model with support for images and a large context window.
+- **amazon.nova-lite-v1:0**: Lightweight model optimized for cost-effective inference.
+- **anthropic.claude-3-5-sonnet-20241022-v2:0**: Advanced model with support for images and computer use.
+- **meta.llama3-3-70b-instruct-v1:0**: Large model with extensive context window and support for images.
+
+For more details on the models and their capabilities, refer to the [AWS Bedrock documentation](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html).
+
+---
+
 ## Installation
 
 Roo Code is available on:
