@@ -291,7 +291,7 @@ export class CustomModesManager {
 			const roomodesPath = await this.getWorkspaceRoomodes()
 
 			const settingsModes = await this.loadModesFromFile(settingsPath)
-			const roomodesModes = await this.loadModesFromFile(roomodesPath)
+			const roomodesModes = roomodesPath ? await this.loadModesFromFile(roomodesPath) : []
 
 			// Find the mode in either file
 			const projectMode = roomodesModes.find((m) => m.slug === slug)
