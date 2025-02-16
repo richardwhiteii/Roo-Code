@@ -71,6 +71,7 @@ const PromptsView = ({ onDone }: PromptsViewProps) => {
 	const [showConfigMenu, setShowConfigMenu] = useState(false)
 	const [isCreateModeDialogOpen, setIsCreateModeDialogOpen] = useState(false)
 	const [activeSupportTab, setActiveSupportTab] = useState<SupportPromptType>("ENHANCE")
+	const [errorState, setErrorState] = useState<string | null>(null) // Add error state
 
 	// Direct update functions
 	const updateAgentPrompt = useCallback(
@@ -292,6 +293,9 @@ const PromptsView = ({ onDone }: PromptsViewProps) => {
 					setSelectedPromptTitle(`System Prompt (${message.mode} mode)`)
 					setIsDialogOpen(true)
 				}
+				// Fetch error state from CustomModesManager
+			} else if (message.type === "errorState") {
+				setErrorState(message.text)
 			}
 		}
 
@@ -516,6 +520,13 @@ const PromptsView = ({ onDone }: PromptsViewProps) => {
 						})}
 					</div>
 				</div>
+
+					{/* Display error message in RED */}
+					{errorState && (
+						<div className="text-red-500 mb-4">
+							<strong>Error:</strong> {errorState}
+						</div>
+					)}
 
 				<div style={{ marginBottom: "20px" }}>
 					{/* Only show name and delete for custom modes */}

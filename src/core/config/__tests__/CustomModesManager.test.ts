@@ -317,6 +317,26 @@ describe("CustomModesManager", () => {
 			expect(fs.readFile).toHaveBeenCalledWith(configPath, "utf-8")
 			expect(mockContext.globalState.update).toHaveBeenCalled()
 			expect(mockOnUpdate).toHaveBeenCalled()
+			expect(manager.getErrorState()).toBeNull()
+		})
+
+		it("sets error state for invalid JSON in settings file", async () => {
+			const configPath = path.join(mockStoragePath, "settings", "cline_custom_modes.json")
+			;(fs.readFile as jest.Mock).mockResolvedValue("invalid json")
+
+			// Get the registered callback
+			const registerCall = (vscode.workspace.onDidSaveTextDocument as jest.Mock).mock.calls[0]
+			expect(registerCall).toBeDefined()
+			const [callback] = registerCall
+
+			// Simulate file save event
+			const mockDocument = {
+				uri: { fsPath: configPath },
+			}
+			await callback(mockDocument)
+
+			// Verify error state was set
+			expect(manager.getErrorState()).toContain("Invalid custom modes format")
 		})
 	})
 

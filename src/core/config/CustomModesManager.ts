@@ -12,6 +12,7 @@ export class CustomModesManager {
 	private disposables: vscode.Disposable[] = []
 	private isWriting = false
 	private writeQueue: Array<() => Promise<void>> = []
+	private errorState: string | null = null
 
 	constructor(
 		private readonly context: vscode.ExtensionContext,
@@ -64,6 +65,7 @@ export class CustomModesManager {
 			if (!result.success) {
 				const errorMsg = `Schema validation failed for ${filePath}`
 				console.error(`[CustomModesManager] ${errorMsg}:`, result.error)
+				this.setErrorState(errorMsg)
 				return []
 			}
 
@@ -72,6 +74,7 @@ export class CustomModesManager {
 			const source = isRoomodes ? ("project" as const) : ("global" as const)
 
 			// Add source to each mode
+			this.clearErrorState()
 			return result.data.customModes.map((mode) => ({
 				...mode,
 				source,
@@ -79,6 +82,7 @@ export class CustomModesManager {
 		} catch (error) {
 			const errorMsg = `Failed to load modes from ${filePath}: ${error instanceof Error ? error.message : String(error)}`
 			console.error(`[CustomModesManager] ${errorMsg}`)
+			this.setErrorState(errorMsg)
 			return []
 		}
 	}
@@ -141,12 +145,14 @@ export class CustomModesManager {
 					} catch (error) {
 						console.error(error)
 						vscode.window.showErrorMessage(errorMessage)
+						this.setErrorState(errorMessage)
 						return
 					}
 
 					const result = CustomModesSettingsSchema.safeParse(config)
 					if (!result.success) {
 						vscode.window.showErrorMessage(errorMessage)
+						this.setErrorState(errorMessage)
 						return
 					}
 
@@ -285,7 +291,7 @@ export class CustomModesManager {
 			const roomodesPath = await this.getWorkspaceRoomodes()
 
 			const settingsModes = await this.loadModesFromFile(settingsPath)
-			const roomodesModes = roomodesPath ? await this.loadModesFromFile(roomodesPath) : []
+			const roomodesModes = await this.loadModesFromFile(roomodesPath)
 
 			// Find the mode in either file
 			const projectMode = roomodesModes.find((m) => m.slug === slug)
@@ -332,6 +338,18 @@ export class CustomModesManager {
 				`Failed to reset custom modes: ${error instanceof Error ? error.message : String(error)}`,
 			)
 		}
+	}
+
+	getErrorState(): string | null {
+		return this.errorState
+	}
+
+	private setErrorState(error: string): void {
+		this.errorState = error
+	}
+
+	private clearErrorState(): void {
+		this.errorState = null
 	}
 
 	dispose(): void {
