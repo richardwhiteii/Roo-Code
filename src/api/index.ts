@@ -16,6 +16,8 @@ import { VsCodeLmHandler } from "./providers/vscode-lm"
 import { ApiStream } from "./transform/stream"
 import { UnboundHandler } from "./providers/unbound"
 import { RequestyHandler } from "./providers/requesty"
+import { AnthropicPromptRouterHandler } from "./providers/anthropic-prompt-router"
+import { MetaPromptRouterHandler } from "./providers/meta-prompt-router"
 
 export interface SingleCompletionHandler {
 	completePrompt(prompt: string): Promise<string>
@@ -59,6 +61,10 @@ export function buildApiHandler(configuration: ApiConfiguration): ApiHandler {
 			return new UnboundHandler(options)
 		case "requesty":
 			return new RequestyHandler(options)
+		case "anthropic-prompt-router":
+			return new AnthropicPromptRouterHandler(options)
+		case "meta-prompt-router":
+			return new MetaPromptRouterHandler(options)
 		default:
 			return new AnthropicHandler(options)
 	}
