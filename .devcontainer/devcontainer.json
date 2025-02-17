@@ -1,0 +1,31 @@
+{
+	"name": "Roo-Code",
+	"image": "mcr.microsoft.com/devcontainers/typescript-node:20",
+	"workspaceMount": "source=${localWorkspaceFolder},target=/home/ec2-user/Roo-Code,type=bind",
+	"workspaceFolder": "/home/ec2-user/Roo-Code",
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"editor.formatOnSave": true,
+				"editor.defaultFormatter": "esbenp.prettier-vscode",
+				"editor.codeActionsOnSave": {
+					"source.fixAll.eslint": true
+				},
+				"typescript.tsdk": "./node_modules/typescript/lib",
+				"typescript.enablePromptUseWorkspaceTsdk": true,
+				"typescript.updateImportsOnFileMove.enabled": "always",
+				"javascript.updateImportsOnFileMove.enabled": "always",
+				"[typescript]": {
+					"editor.defaultFormatter": "esbenp.prettier-vscode",
+					"editor.tabSize": 2
+				},
+				"[javascript]": {
+					"editor.defaultFormatter": "esbenp.prettier-vscode",
+					"editor.tabSize": 2
+				}
+			},
+			"extensions": ["esbenp.prettier-vscode", "dbaeumer.vscode-eslint", "Orta.vscode-jest"]
+		}
+	},
+	"postCreateCommand": "npm run install:all"
+}
