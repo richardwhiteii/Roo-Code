@@ -88,12 +88,21 @@ const ApiOptions = ({ apiErrorMessage, modelIdErrorMessage, fromWelcomeView }: A
 	)
 	const handleMessage = useCallback((event: MessageEvent) => {
 		const message: ExtensionMessage = event.data
-		if (message.type === "ollamaModels" && message.ollamaModels) {
-			setOllamaModels(message.ollamaModels)
-		} else if (message.type === "lmStudioModels" && message.lmStudioModels) {
-			setLmStudioModels(message.lmStudioModels)
-		} else if (message.type === "vsCodeLmModels" && message.vsCodeLmModels) {
-			setVsCodeLmModels(message.vsCodeLmModels)
+		if (message.type === "ollamaModels" && Array.isArray(message.ollamaModels)) {
+			const newModels = message.ollamaModels
+			setOllamaModels((prevModels) => {
+				return JSON.stringify(prevModels) === JSON.stringify(newModels) ? prevModels : newModels
+			})
+		} else if (message.type === "lmStudioModels" && Array.isArray(message.lmStudioModels)) {
+			const newModels = message.lmStudioModels
+			setLmStudioModels((prevModels) => {
+				return JSON.stringify(prevModels) === JSON.stringify(newModels) ? prevModels : newModels
+			})
+		} else if (message.type === "vsCodeLmModels" && Array.isArray(message.vsCodeLmModels)) {
+			const newModels = message.vsCodeLmModels
+			setVsCodeLmModels((prevModels) => {
+				return JSON.stringify(prevModels) === JSON.stringify(newModels) ? prevModels : newModels
+			})
 		}
 	}, [])
 	useEvent("message", handleMessage)
@@ -312,17 +321,38 @@ const ApiOptions = ({ apiErrorMessage, modelIdErrorMessage, fromWelcomeView }: A
 							color: "var(--vscode-descriptionForeground)",
 						}}>
 						This key is stored locally and only used to make API requests from this extension.
-						{!apiConfiguration?.mistralApiKey && (
-							<VSCodeLink
-								href="https://console.mistral.ai/codestral/"
-								style={{
-									display: "inline",
-									fontSize: "inherit",
-								}}>
-								You can get a Mistral API key by signing up here.
-							</VSCodeLink>
-						)}
+						<VSCodeLink
+							href="https://console.mistral.ai/"
+							style={{
+								display: "inline",
+								fontSize: "inherit",
+							}}>
+							You can get a La Plateforme (api.mistral.ai) or Codestral (codestral.mistral.ai) API key by
+							signing up here.
+						</VSCodeLink>
 					</p>
+
+					{(apiConfiguration?.apiModelId?.startsWith("codestral-") ||
+						(!apiConfiguration?.apiModelId && mistralDefaultModelId.startsWith("codestral-"))) && (
+						<div>
+							<VSCodeTextField
+								value={apiConfiguration?.mistralCodestralUrl || ""}
+								style={{ width: "100%", marginTop: "10px" }}
+								type="url"
+								onBlur={handleInputChange("mistralCodestralUrl")}
+								placeholder="Default: https://codestral.mistral.ai">
+								<span style={{ fontWeight: 500 }}>Codestral Base URL (Optional)</span>
+							</VSCodeTextField>
+							<p
+								style={{
+									fontSize: "12px",
+									marginTop: 3,
+									color: "var(--vscode-descriptionForeground)",
+								}}>
+								Set alternative URL for Codestral model: https://api.mistral.ai
+							</p>
+						</div>
+					)}
 				</div>
 			)}
 
@@ -346,30 +376,6 @@ const ApiOptions = ({ apiErrorMessage, modelIdErrorMessage, fromWelcomeView }: A
 							</VSCodeButtonLink>
 						</p>
 					)}
-					<Checkbox
-						checked={openRouterBaseUrlSelected}
-						onChange={(checked: boolean) => {
-							setOpenRouterBaseUrlSelected(checked)
-							if (!checked) {
-								handleInputChange("openRouterBaseUrl")({
-									target: {
-										value: "",
-									},
-								})
-							}
-						}}>
-						Use custom base URL
-					</Checkbox>
-
-					{openRouterBaseUrlSelected && (
-						<VSCodeTextField
-							value={apiConfiguration?.openRouterBaseUrl || ""}
-							style={{ width: "100%", marginTop: 3 }}
-							type="url"
-							onBlur={handleInputChange("openRouterBaseUrl")}
-							placeholder="Default: https://openrouter.ai/api/v1"
-						/>
-					)}
 					<p
 						style={{
 							fontSize: "12px",
@@ -377,24 +383,45 @@ const ApiOptions = ({ apiErrorMessage, modelIdErrorMessage, fromWelcomeView }: A
 							color: "var(--vscode-descriptionForeground)",
 						}}>
 						This key is stored locally and only used to make API requests from this extension.{" "}
-						{/* {!apiConfiguration?.openRouterApiKey && (
-							<span style={{ color: "var(--vscode-charts-green)" }}>
-								(<span style={{ fontWeight: 500 }}>Note:</span> OpenRouter is recommended for high rate
-								limits, prompt caching, and wider selection of models.)
-							</span>
-						)} */}
 					</p>
-					<Checkbox
-						checked={apiConfiguration?.openRouterUseMiddleOutTransform || false}
-						onChange={(checked: boolean) => {
-							handleInputChange("openRouterUseMiddleOutTransform")({
-								target: { value: checked },
-							})
-						}}>
-						Compress prompts and message chains to the context size (
-						<a href="https://openrouter.ai/docs/transforms">OpenRouter Transforms</a>)
-					</Checkbox>
-					<br />
+					{!fromWelcomeView && (
+						<>
+							<Checkbox
+								checked={openRouterBaseUrlSelected}
+								onChange={(checked: boolean) => {
+									setOpenRouterBaseUrlSelected(checked)
+									if (!checked) {
+										handleInputChange("openRouterBaseUrl")({
+											target: {
+												value: "",
+											},
+										})
+									}
+								}}>
+								Use custom base URL
+							</Checkbox>
+
+							{openRouterBaseUrlSelected && (
+								<VSCodeTextField
+									value={apiConfiguration?.openRouterBaseUrl || ""}
+									style={{ width: "100%", marginTop: 3 }}
+									type="url"
+									onBlur={handleInputChange("openRouterBaseUrl")}
+									placeholder="Default: https://openrouter.ai/api/v1"
+								/>
+							)}
+							<Checkbox
+								checked={apiConfiguration?.openRouterUseMiddleOutTransform || false}
+								onChange={(checked: boolean) => {
+									handleInputChange("openRouterUseMiddleOutTransform")({
+										target: { value: checked },
+									})
+								}}>
+								Compress prompts and message chains to the context size (
+								<a href="https://openrouter.ai/docs/transforms">OpenRouter Transforms</a>)
+							</Checkbox>
+						</>
+					)}
 				</div>
 			)}
 

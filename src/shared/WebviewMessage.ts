@@ -81,6 +81,7 @@ export interface WebviewMessage {
 		| "updateSupportPrompt"
 		| "resetSupportPrompt"
 		| "getSystemPrompt"
+		| "copySystemPrompt"
 		| "systemPrompt"
 		| "enhancementApiConfigId"
 		| "updateExperimental"
@@ -91,6 +92,7 @@ export interface WebviewMessage {
 		| "openCustomModesSettings"
 		| "checkpointDiff"
 		| "checkpointRestore"
+		| "maxOpenTabsContext"
 	text?: string
 	disabled?: boolean
 	askResponse?: ClineAskResponse
@@ -113,6 +115,7 @@ export interface WebviewMessage {
 	modeConfig?: ModeConfig
 	timeout?: number
 	payload?: WebViewMessagePayload
+	source?: "global" | "project"
 }
 
 export const checkoutDiffPayloadSchema = z.object({

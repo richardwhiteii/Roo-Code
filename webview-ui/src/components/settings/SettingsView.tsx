@@ -63,6 +63,8 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 		setExperimentEnabled,
 		alwaysAllowModeSwitch,
 		setAlwaysAllowModeSwitch,
+		maxOpenTabsContext,
+		setMaxOpenTabsContext,
 	} = useExtensionState()
 	const [apiErrorMessage, setApiErrorMessage] = useState<string | undefined>(undefined)
 	const [modelIdErrorMessage, setModelIdErrorMessage] = useState<string | undefined>(undefined)
@@ -104,6 +106,7 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 			vscode.postMessage({ type: "alwaysApproveResubmit", bool: alwaysApproveResubmit })
 			vscode.postMessage({ type: "requestDelaySeconds", value: requestDelaySeconds })
 			vscode.postMessage({ type: "rateLimitSeconds", value: rateLimitSeconds })
+			vscode.postMessage({ type: "maxOpenTabsContext", value: maxOpenTabsContext })
 			vscode.postMessage({ type: "currentApiConfigName", text: currentApiConfigName })
 			vscode.postMessage({
 				type: "upsertApiConfiguration",
@@ -627,6 +630,28 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 					</div>
 
 					<div style={{ marginBottom: 15 }}>
+						<div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+							<span style={{ fontWeight: "500" }}>Open tabs context limit</span>
+							<div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+								<input
+									type="range"
+									min="0"
+									max="500"
+									step="1"
+									value={maxOpenTabsContext ?? 20}
+									onChange={(e) => setMaxOpenTabsContext(parseInt(e.target.value))}
+									style={{ ...sliderStyle }}
+								/>
+								<span style={{ ...sliderLabelStyle }}>{maxOpenTabsContext ?? 20}</span>
+							</div>
+						</div>
+						<p style={{ fontSize: "12px", marginTop: "5px", color: "var(--vscode-descriptionForeground)" }}>
+							Maximum number of VSCode open tabs to include in context. Higher values provide more context
+							but increase token usage.
+						</p>
+					</div>
+
+					<div style={{ marginBottom: 15 }}>
 						<VSCodeCheckbox
 							checked={diffEnabled}
 							onChange={(e: any) => {
@@ -701,29 +726,27 @@ const SettingsView = ({ onDone }: SettingsViewProps) => {
 							</div>
 						)}
 
-						{process.platform !== "win32" && (
-							<div style={{ marginBottom: 15 }}>
-								<div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-									<span style={{ color: "var(--vscode-errorForeground)" }}>⚠️</span>
-									<VSCodeCheckbox
-										checked={checkpointsEnabled}
-										onChange={(e: any) => {
-											setCheckpointsEnabled(e.target.checked)
-										}}>
-										<span style={{ fontWeight: "500" }}>Enable experimental checkpoints</span>
-									</VSCodeCheckbox>
-								</div>
-								<p
-									style={{
-										fontSize: "12px",
-										marginTop: "5px",
-										color: "var(--vscode-descriptionForeground)",
+						<div style={{ marginBottom: 15 }}>
+							<div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+								<span style={{ color: "var(--vscode-errorForeground)" }}>⚠️</span>
+								<VSCodeCheckbox
+									checked={checkpointsEnabled}
+									onChange={(e: any) => {
+										setCheckpointsEnabled(e.target.checked)
 									}}>
-									When enabled, Roo will save a checkpoint whenever a file in the workspace is
-									modified, added or deleted, letting you easily revert to a previous state.
-								</p>
+									<span style={{ fontWeight: "500" }}>Enable experimental checkpoints</span>
+								</VSCodeCheckbox>
 							</div>
-						)}
+							<p
+								style={{
+									fontSize: "12px",
+									marginTop: "5px",
+									color: "var(--vscode-descriptionForeground)",
+								}}>
+								When enabled, Roo will save a checkpoint whenever a file in the workspace is modified,
+								added or deleted, letting you easily revert to a previous state.
+							</p>
+						</div>
 
 						{Object.entries(experimentConfigsMap)
 							.filter((config) => config[0] !== "DIFF_STRATEGY")

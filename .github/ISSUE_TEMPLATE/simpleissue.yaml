@@ -1,5 +1,5 @@
 name: Fork Issue
-description: Create an issue to track changes made in this fork
+description: Create a simple issue to track changes when working inside the fork, before going to main.
 title: "[Fork] "
 labels: []
 assignees: []

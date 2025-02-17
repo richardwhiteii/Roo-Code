@@ -1,5 +1,32 @@
 # Roo Code Changelog
 
+## [3.3.20]
+
+- Support project-specific custom modes in a .roomodes file
+- Add more Mistral models (thanks @d-oit and @bramburn!)
+- By popular request, make it so Ask mode can't write to Markdown files and is purely for chatting with
+- Add a setting to control the number of open editor tabs to tell the model about (665 is probably too many!)
+- Fix race condition bug with entering API key on the welcome screen
+
+## [3.3.19]
+
+- Fix a bug where aborting in the middle of file writes would not revert the write
+- Honor the VS Code theme for dialog backgrounds
+- Make it possible to clear out the default custom instructions for built-in modes
+- Add a help button that links to our new documentation site (which we would love help from the community to improve!)
+- Switch checkpoints logic to use a shadow git repository to work around issues with hot reloads and polluting existing repositories (thanks Cline for the inspiration!)
+
+## [3.3.18]
+
+- Add a per-API-configuration model temperature setting (thanks @joemanley201!)
+- Add retries for fetching usage stats from OpenRouter (thanks @jcbdev!)
+- Fix bug where disabled MCP servers would not show up in the settings on initialization (thanks @MuriloFP!)
+- Add the Requesty provider and clean up a lot of shared model picker code (thanks @samhvw8!)
+- Add a button on the Prompts tab to copy the full system prompt to the clipboard (thanks @mamertofabian!)
+- Fix issue where Ollama/LMStudio URLs would flicker back to previous while entering them in settings
+- Fix logic error where automatic retries were waiting twice as long as intended
+- Rework the checkpoints code to avoid conflicts with file locks on Windows (sorry for the hassle!)
+
 ## [3.3.17]
 
 - Fix the restore checkpoint popover

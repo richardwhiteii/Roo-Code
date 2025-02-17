@@ -127,6 +127,8 @@ type GlobalStateKey =
 	| "requestyModelInfo"
 	| "unboundModelInfo"
 	| "modelTemperature"
+	| "mistralCodestralUrl"
+	| "maxOpenTabsContext"
 
 export const GlobalFileNames = {
 	apiConversationHistory: "api_conversation_history.json",
@@ -1207,6 +1209,11 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 						await this.updateGlobalState("screenshotQuality", message.value)
 						await this.postStateToWebview()
 						break
+					case "maxOpenTabsContext":
+						const tabCount = Math.min(Math.max(0, message.value ?? 20), 500)
+						await this.updateGlobalState("maxOpenTabsContext", tabCount)
+						await this.postStateToWebview()
+						break
 					case "enhancementApiConfigId":
 						await this.updateGlobalState("enhancementApiConfigId", message.text)
 						await this.postStateToWebview()
@@ -1265,53 +1272,26 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 						break
 					case "getSystemPrompt":
 						try {
-							const {
-								apiConfiguration,
-								customModePrompts,
-								customInstructions,
-								preferredLanguage,
-								browserViewportSize,
-								diffEnabled,
-								mcpEnabled,
-								fuzzyMatchThreshold,
-								experiments,
-								enableMcpServerCreation,
-							} = await this.getState()
-
-							// Create diffStrategy based on current model and settings
-							const diffStrategy = getDiffStrategy(
-								apiConfiguration.apiModelId || apiConfiguration.openRouterModelId || "",
-								fuzzyMatchThreshold,
-								Experiments.isEnabled(experiments, EXPERIMENT_IDS.DIFF_STRATEGY),
-							)
-							const cwd =
-								vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath).at(0) || ""
-
-							const mode = message.mode ?? defaultModeSlug
-							const customModes = await this.customModesManager.getCustomModes()
-
-							const systemPrompt = await SYSTEM_PROMPT(
-								this.context,
-								cwd,
-								apiConfiguration.openRouterModelInfo?.supportsComputerUse ?? false,
-								mcpEnabled ? this.mcpHub : undefined,
-								diffStrategy,
-								browserViewportSize ?? "900x600",
-								mode,
-								customModePrompts,
-								customModes,
-								customInstructions,
-								preferredLanguage,
-								diffEnabled,
-								experiments,
-								enableMcpServerCreation,
-							)
+							const systemPrompt = await generateSystemPrompt(message)
 
 							await this.postMessageToWebview({
 								type: "systemPrompt",
 								text: systemPrompt,
 								mode: message.mode,
 							})
+						} catch (error) {
+							this.outputChannel.appendLine(
+								`Error getting system prompt:  ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
+							)
+							vscode.window.showErrorMessage("Failed to get system prompt")
+						}
+						break
+					case "copySystemPrompt":
+						try {
+							const systemPrompt = await generateSystemPrompt(message)
+
+							await vscode.env.clipboard.writeText(systemPrompt)
+							await vscode.window.showInformationMessage("System prompt successfully copied to clipboard")
 						} catch (error) {
 							this.outputChannel.appendLine(
 								`Error getting system prompt:  ${JSON.stringify(error, Object.getOwnPropertyNames(error), 2)}`,
@@ -1524,6 +1504,50 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			null,
 			this.disposables,
 		)
+
+		const generateSystemPrompt = async (message: WebviewMessage) => {
+			const {
+				apiConfiguration,
+				customModePrompts,
+				customInstructions,
+				preferredLanguage,
+				browserViewportSize,
+				diffEnabled,
+				mcpEnabled,
+				fuzzyMatchThreshold,
+				experiments,
+				enableMcpServerCreation,
+			} = await this.getState()
+
+			// Create diffStrategy based on current model and settings
+			const diffStrategy = getDiffStrategy(
+				apiConfiguration.apiModelId || apiConfiguration.openRouterModelId || "",
+				fuzzyMatchThreshold,
+				Experiments.isEnabled(experiments, EXPERIMENT_IDS.DIFF_STRATEGY),
+			)
+			const cwd = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath).at(0) || ""
+
+			const mode = message.mode ?? defaultModeSlug
+			const customModes = await this.customModesManager.getCustomModes()
+
+			const systemPrompt = await SYSTEM_PROMPT(
+				this.context,
+				cwd,
+				apiConfiguration.openRouterModelInfo?.supportsComputerUse ?? false,
+				mcpEnabled ? this.mcpHub : undefined,
+				diffStrategy,
+				browserViewportSize ?? "900x600",
+				mode,
+				customModePrompts,
+				customModes,
+				customInstructions,
+				preferredLanguage,
+				diffEnabled,
+				experiments,
+				enableMcpServerCreation,
+			)
+			return systemPrompt
+		}
 	}
 
 	/**
@@ -1614,6 +1638,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			openRouterUseMiddleOutTransform,
 			vsCodeLmModelSelector,
 			mistralApiKey,
+			mistralCodestralUrl,
 			unboundApiKey,
 			unboundModelId,
 			unboundModelInfo,
@@ -1659,6 +1684,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 		await this.updateGlobalState("openRouterUseMiddleOutTransform", openRouterUseMiddleOutTransform)
 		await this.updateGlobalState("vsCodeLmModelSelector", vsCodeLmModelSelector)
 		await this.storeSecret("mistralApiKey", mistralApiKey)
+		await this.updateGlobalState("mistralCodestralUrl", mistralCodestralUrl)
 		await this.storeSecret("unboundApiKey", unboundApiKey)
 		await this.updateGlobalState("unboundModelId", unboundModelId)
 		await this.updateGlobalState("unboundModelInfo", unboundModelInfo)
@@ -2260,35 +2286,55 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 
 		await this.deleteTaskFromState(id)
 
-		// Delete the task files
+		// Delete the task files.
 		const apiConversationHistoryFileExists = await fileExistsAtPath(apiConversationHistoryFilePath)
+
 		if (apiConversationHistoryFileExists) {
 			await fs.unlink(apiConversationHistoryFilePath)
 		}
+
 		const uiMessagesFileExists = await fileExistsAtPath(uiMessagesFilePath)
+
 		if (uiMessagesFileExists) {
 			await fs.unlink(uiMessagesFilePath)
 		}
+
 		const legacyMessagesFilePath = path.join(taskDirPath, "claude_messages.json")
+
 		if (await fileExistsAtPath(legacyMessagesFilePath)) {
 			await fs.unlink(legacyMessagesFilePath)
 		}
-		await fs.rmdir(taskDirPath) // succeeds if the dir is empty
 
 		const { checkpointsEnabled } = await this.getState()
 		const baseDir = vscode.workspace.workspaceFolders?.map((folder) => folder.uri.fsPath).at(0)
-		const branch = `roo-code-checkpoints-${id}`
 
+		// Delete checkpoints branch.
 		if (checkpointsEnabled && baseDir) {
+			const branchSummary = await simpleGit(baseDir)
+				.branch(["-D", `roo-code-checkpoints-${id}`])
+				.catch(() => undefined)
+
+			if (branchSummary) {
+				console.log(`[deleteTaskWithId${id}] deleted checkpoints branch`)
+			}
+		}
+
+		// Delete checkpoints directory
+		const checkpointsDir = path.join(taskDirPath, "checkpoints")
+
+		if (await fileExistsAtPath(checkpointsDir)) {
 			try {
-				await simpleGit(baseDir).branch(["-D", branch])
-				console.log(`[deleteTaskWithId] Deleted branch ${branch}`)
-			} catch (err) {
+				await fs.rm(checkpointsDir, { recursive: true, force: true })
+				console.log(`[deleteTaskWithId${id}] removed checkpoints repo`)
+			} catch (error) {
 				console.error(
-					`[deleteTaskWithId] Error deleting branch ${branch}: ${err instanceof Error ? err.message : String(err)}`,
+					`[deleteTaskWithId${id}] failed to remove checkpoints repo: ${error instanceof Error ? error.message : String(error)}`,
 				)
 			}
 		}
+
+		// Succeeds if the dir is empty.
+		await fs.rmdir(taskDirPath)
 	}
 
 	async deleteTaskFromState(id: string) {
@@ -2341,6 +2387,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			enhancementApiConfigId,
 			autoApprovalEnabled,
 			experiments,
+			maxOpenTabsContext,
 		} = await this.getState()
 
 		const allowedCommands = vscode.workspace.getConfiguration("roo-cline").get<string[]>("allowedCommands") || []
@@ -2356,6 +2403,9 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			alwaysAllowMcp: alwaysAllowMcp ?? false,
 			alwaysAllowModeSwitch: alwaysAllowModeSwitch ?? false,
 			uriScheme: vscode.env.uriScheme,
+			currentTaskItem: this.cline?.taskId
+				? (taskHistory || []).find((item) => item.id === this.cline?.taskId)
+				: undefined,
 			clineMessages: this.cline?.clineMessages || [],
 			taskHistory: (taskHistory || [])
 				.filter((item: HistoryItem) => item.ts && item.task)
@@ -2387,6 +2437,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			customModes: await this.customModesManager.getCustomModes(),
 			experiments: experiments ?? experimentDefault,
 			mcpServers: this.mcpHub?.getAllServers() ?? [],
+			maxOpenTabsContext: maxOpenTabsContext ?? 20,
 		}
 	}
 
@@ -2473,6 +2524,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			openAiNativeApiKey,
 			deepSeekApiKey,
 			mistralApiKey,
+			mistralCodestralUrl,
 			azureApiVersion,
 			openAiStreamingEnabled,
 			openRouterModelId,
@@ -2522,6 +2574,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			requestyModelId,
 			requestyModelInfo,
 			modelTemperature,
+			maxOpenTabsContext,
 		] = await Promise.all([
 			this.getGlobalState("apiProvider") as Promise<ApiProvider | undefined>,
 			this.getGlobalState("apiModelId") as Promise<string | undefined>,
@@ -2553,6 +2606,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			this.getSecret("openAiNativeApiKey") as Promise<string | undefined>,
 			this.getSecret("deepSeekApiKey") as Promise<string | undefined>,
 			this.getSecret("mistralApiKey") as Promise<string | undefined>,
+			this.getGlobalState("mistralCodestralUrl") as Promise<string | undefined>,
 			this.getGlobalState("azureApiVersion") as Promise<string | undefined>,
 			this.getGlobalState("openAiStreamingEnabled") as Promise<boolean | undefined>,
 			this.getGlobalState("openRouterModelId") as Promise<string | undefined>,
@@ -2602,6 +2656,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			this.getGlobalState("requestyModelId") as Promise<string | undefined>,
 			this.getGlobalState("requestyModelInfo") as Promise<ModelInfo | undefined>,
 			this.getGlobalState("modelTemperature") as Promise<number | undefined>,
+			this.getGlobalState("maxOpenTabsContext") as Promise<number | undefined>,
 		])
 
 		let apiProvider: ApiProvider
@@ -2650,6 +2705,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 				openAiNativeApiKey,
 				deepSeekApiKey,
 				mistralApiKey,
+				mistralCodestralUrl,
 				azureApiVersion,
 				openAiStreamingEnabled,
 				openRouterModelId,
@@ -2728,6 +2784,7 @@ export class ClineProvider implements vscode.WebviewViewProvider {
 			experiments: experiments ?? experimentDefault,
 			autoApprovalEnabled: autoApprovalEnabled ?? false,
 			customModes,
+			maxOpenTabsContext: maxOpenTabsContext ?? 20,
 		}
 	}
 
