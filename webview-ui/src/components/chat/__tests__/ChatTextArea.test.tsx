@@ -160,4 +160,12 @@ describe("ChatTextArea", () => {
 			expect(setInputValue).toHaveBeenCalledWith("Enhanced test prompt")
 		})
 	})
+
+	describe("spellCheck attribute", () => {
+		it("should have spellCheck attribute set to true", () => {
+			render(<ChatTextArea {...defaultProps} />)
+			const textArea = screen.getByPlaceholderText("Type a message...")
+			expect(textArea).toHaveAttribute("spellCheck", "true")
+		})
+	})
 })
