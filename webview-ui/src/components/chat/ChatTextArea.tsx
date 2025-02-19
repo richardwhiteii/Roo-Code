@@ -712,6 +712,7 @@ const ChatTextArea = forwardRef<HTMLTextAreaElement, ChatTextAreaProps>(
 						minRows={3}
 						maxRows={15}
 						autoFocus={true}
+						spellCheck={true}
 						style={{
 							width: "100%",
 							outline: "none",
