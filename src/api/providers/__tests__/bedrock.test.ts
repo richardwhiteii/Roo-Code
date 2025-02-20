@@ -1,4 +1,3 @@
-// Mock AWS SDK credential providers
 jest.mock("@aws-sdk/credential-providers", () => ({
 	fromIni: jest.fn().mockReturnValue({
 		accessKeyId: "profile-access-key",
@@ -21,6 +20,7 @@ describe("AwsBedrockHandler", () => {
 			awsAccessKey: "test-access-key",
 			awsSecretKey: "test-secret-key",
 			awsRegion: "us-east-1",
+			awsInferenceProfileId: "test-inference-profile-id",
 		})
 	})
 
@@ -30,6 +30,7 @@ describe("AwsBedrockHandler", () => {
 			expect(handler["options"].awsSecretKey).toBe("test-secret-key")
 			expect(handler["options"].awsRegion).toBe("us-east-1")
 			expect(handler["options"].apiModelId).toBe("anthropic.claude-3-5-sonnet-20241022-v2:0")
+			expect(handler["options"].awsInferenceProfileId).toBe("test-inference-profile-id")
 		})
 
 		it("should initialize with missing AWS credentials", () => {
@@ -180,6 +181,64 @@ describe("AwsBedrockHandler", () => {
 					// Should throw before yielding any chunks
 				}
 			}).rejects.toThrow("AWS Bedrock error")
+			// P2443
+		})
+
+		it("should retry with inference profile ID on on-demand throughput error", async () => {
+			const mockError = new Error("on-demand throughput isn’t supported")
+			const mockInvoke = jest.fn()
+				.mockRejectedValueOnce(mockError) // First call fails
+				.mockResolvedValueOnce({
+					stream: {
+						[Symbol.asyncIterator]: async function* () {
+							yield {
+								metadata: {
+									usage: {
+										inputTokens: 10,
+										outputTokens: 5,
+									},
+								},
+							}
+						},
+					},
+				}) // Second call succeeds
+
+			handler["client"] = {
+				send: mockInvoke,
+			} as unknown as BedrockRuntimeClient
+
+			const stream = handler.createMessage(systemPrompt, mockMessages)
+			const chunks = []
+
+			for await (const chunk of stream) {
+				chunks.push(chunk)
+			}
+
+			expect(chunks.length).toBeGreaterThan(0)
+			expect(chunks[0]).toEqual({
+				type: "usage",
+				inputTokens: 10,
+				outputTokens: 5,
+			})
+
+			expect(mockInvoke).toHaveBeenCalledTimes(2)
+			expect(mockInvoke).toHaveBeenCalledWith(
+				expect.objectContaining({
+					input: expect.objectContaining({
+						modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+					}),
+				}),
+			)
+			expect(mockInvoke).toHaveBeenCalledWith(
+				expect.objectContaining({
+					input: expect.objectContaining({
+						modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+						inferenceConfig: expect.objectContaining({
+							inferenceProfileId: "test-inference-profile-id",
+						}),
+					}),
+				}),
+			)
 		})
 	})
 
@@ -288,6 +347,45 @@ describe("AwsBedrockHandler", () => {
 				expect.objectContaining({
 					input: expect.objectContaining({
 						modelId: "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+					}),
+				}),
+			)
+		})
+
+		it("should retry with inference profile ID on on-demand throughput error", async () => {
+			const mockError = new Error("on-demand throughput isn’t supported")
+			const mockSend = jest.fn()
+				.mockRejectedValueOnce(mockError) // First call fails
+				.mockResolvedValueOnce({
+					output: new TextEncoder().encode(
+						JSON.stringify({
+							content: "Test response",
+						}),
+					),
+				}) // Second call succeeds
+
+			handler["client"] = {
+				send: mockSend,
+			} as unknown as BedrockRuntimeClient
+
+			const result = await handler.completePrompt("Test prompt")
+			expect(result).toBe("Test response")
+
+			expect(mockSend).toHaveBeenCalledTimes(2)
+			expect(mockSend).toHaveBeenCalledWith(
+				expect.objectContaining({
+					input: expect.objectContaining({
+						modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+					}),
+				}),
+			)
+			expect(mockSend).toHaveBeenCalledWith(
+				expect.objectContaining({
+					input: expect.objectContaining({
+						modelId: "anthropic.claude-3-5-sonnet-20241022-v2:0",
+						inferenceConfig: expect.objectContaining({
+							inferenceProfileId: "test-inference-profile-id",
+						}),
 					}),
 				}),
 			)
