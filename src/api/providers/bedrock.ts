@@ -115,6 +115,11 @@ export class AwsBedrockHandler implements ApiHandler, SingleCompletionHandler {
 							},
 						}
 					: {}),
+				...(this.options.awsInferenceProfileId
+					? {
+							inferenceProfileId: this.options.awsInferenceProfileId,
+						}
+					: {}),
 			},
 		}
 
@@ -179,16 +184,74 @@ export class AwsBedrockHandler implements ApiHandler, SingleCompletionHandler {
 			// Only access stack if error is an Error object
 			if (error instanceof Error) {
 				console.error("Error stack:", error.stack)
-				yield {
-					type: "text",
-					text: `Error: ${error.message}`,
+				if (error.message.includes("on-demand throughput isn’t supported")) {
+					// Retry with inference profile ID or ARN
+					if (this.options.awsInferenceProfileId) {
+						payload.inferenceConfig.inferenceProfileId = this.options.awsInferenceProfileId
+						const retryCommand = new ConverseStreamCommand(payload)
+						const retryResponse = await this.client.send(retryCommand)
+
+						if (!retryResponse.stream) {
+							throw new Error("No stream available in the retry response")
+						}
+
+						for await (const chunk of retryResponse.stream) {
+							let streamEvent: StreamEvent
+							try {
+								streamEvent = typeof chunk === "string" ? JSON.parse(chunk) : (chunk as unknown as StreamEvent)
+							} catch (e) {
+								console.error("Failed to parse retry stream event:", e)
+								continue
+							}
+
+							if (streamEvent.metadata?.usage) {
+								yield {
+									type: "usage",
+									inputTokens: streamEvent.metadata.usage.inputTokens || 0,
+									outputTokens: streamEvent.metadata.usage.outputTokens || 0,
+								}
+								continue
+							}
+
+							if (streamEvent.messageStart) {
+								continue
+							}
+
+							if (streamEvent.contentBlockStart?.start?.text) {
+								yield {
+									type: "text",
+									text: streamEvent.contentBlockStart.start.text,
+								}
+								continue
+							}
+
+							if (streamEvent.contentBlockDelta?.delta?.text) {
+								yield {
+									type: "text",
+									text: streamEvent.contentBlockDelta.delta.text,
+								}
+								continue
+							}
+
+							if (streamEvent.messageStop) {
+								continue
+							}
+						}
+					} else {
+						throw new Error("Inference profile ID or ARN is not specified")
+					}
+				} else {
+					yield {
+						type: "text",
+						text: `Error: ${error.message}`,
+					}
+					yield {
+						type: "usage",
+						inputTokens: 0,
+						outputTokens: 0,
+					}
+					throw error
 				}
-				yield {
-					type: "usage",
-					inputTokens: 0,
-					outputTokens: 0,
-				}
-				throw error
 			} else {
 				const unknownError = new Error("An unknown error occurred")
 				yield {
@@ -266,6 +329,11 @@ export class AwsBedrockHandler implements ApiHandler, SingleCompletionHandler {
 					maxTokens: modelConfig.info.maxTokens || 5000,
 					temperature: this.options.modelTemperature ?? BEDROCK_DEFAULT_TEMPERATURE,
 					topP: 0.1,
+					...(this.options.awsInferenceProfileId
+						? {
+								inferenceProfileId: this.options.awsInferenceProfileId,
+							}
+						: {}),
 				},
 			}
 
@@ -286,6 +354,43 @@ export class AwsBedrockHandler implements ApiHandler, SingleCompletionHandler {
 			return ""
 		} catch (error) {
 			if (error instanceof Error) {
+				if (error.message.includes("on-demand throughput isn’t supported")) {
+					// Retry with inference profile ID or ARN
+					if (this.options.awsInferenceProfileId) {
+						const payload = {
+							modelId: this.getModel().id,
+							messages: convertToBedrockConverseMessages([
+								{
+									role: "user",
+									content: prompt,
+								},
+							]),
+							inferenceConfig: {
+								maxTokens: this.getModel().info.maxTokens || 5000,
+								temperature: this.options.modelTemperature ?? BEDROCK_DEFAULT_TEMPERATURE,
+								topP: 0.1,
+								inferenceProfileId: this.options.awsInferenceProfileId,
+							},
+						}
+
+						const retryCommand = new ConverseCommand(payload)
+						const retryResponse = await this.client.send(retryCommand)
+
+						if (retryResponse.output && retryResponse.output instanceof Uint8Array) {
+							try {
+								const outputStr = new TextDecoder().decode(retryResponse.output)
+								const output = JSON.parse(outputStr)
+								if (output.content) {
+									return output.content
+								}
+							} catch (parseError) {
+								console.error("Failed to parse retry Bedrock response:", parseError)
+							}
+						}
+					} else {
+						throw new Error("Inference profile ID or ARN is not specified")
+					}
+				}
 				throw new Error(`Bedrock completion error: ${error.message}`)
 			}
 			throw error
